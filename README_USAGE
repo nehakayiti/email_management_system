@@ -1,0 +1,4 @@
+# Using the Cli
+
+# authenticate
+python cli auth {login, refresh, reset}

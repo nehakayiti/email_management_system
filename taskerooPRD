@@ -1,0 +1,152 @@
+## Product Requirements Document (PRD)
+
+### Project: Taskeroo
+
+### Overview
+Taskeroo is an email automation application designed to help users manage their Gmail inbox efficiently by automatically deleting unimportant emails and providing summaries of important ones. The application learns from user actions over time to improve its automation capabilities.
+
+### Goals
+- **Automate Email Management**: Automate the process of deleting unimportant emails, summarizing less critical ones, and flagging actionable emails.
+- **Summary of Actions**: Provide a summary of all actions taken by Taskeroo.
+- **Machine Learning**: Implement an ML algorithm that improves as the user interacts with the Gmail system.
+- **User Feedback Loop**: Continuously refine email categorization based on user feedback and actions.
+- **Extensible System**: Ensure the categorization system can evolve with additional categories and actions over time.
+
+### User Experience
+
+#### User Story
+- As a user, I want Taskeroo to automatically manage my emails, so I can focus on important tasks without worrying about email clutter.
+- As a user, I want to review summaries of important emails and actions taken by Taskeroo, so I stay informed without checking each email.
+- As a user, I want Taskeroo to learn from my email interactions, so it gets better at managing my inbox over time.
+- As a user, I want to provide manual feedback on email categorization so that the system can improve over time.
+
+#### User Interaction Flow
+1. **Authentication**:
+    - User grants Taskeroo access to their Gmail account through OAuth.
+    - Taskeroo stores and refreshes tokens as needed without user intervention.
+
+2. **Email Fetching**:
+    - Taskeroo fetches emails daily (default), or within a specified date range.
+    - Emails are fetched from both the Inbox and Trash folders to understand user preferences.
+
+3. **Email Categorization**:
+    - Taskeroo categorizes emails into nuanced categories:
+      - Immediate Deletion: Promotions, advertisements, and spam.
+      - Summarizable: Newsletters, social updates.
+      - Actionable: Bills, reminders, to-do items.
+      - Neutral: Emails that do not fit into the above categories.
+    - User can provide feedback to improve categorization through:
+      - Explicit feedback (e.g., marking emails as important or unimportant).
+      - Implicit feedback based on actions (e.g., deleting, reading, or ignoring emails).
+
+4. **Email Deletion**:
+    - Taskeroo deletes unimportant emails automatically.
+    - User reviews deletions before they are finalized (optional setting).
+    - Taskeroo ensures no important emails are deleted without user permission.
+
+5. **Email Summarization**:
+    - Taskeroo provides daily summaries of important and summarizable emails.
+    - User can customize the summary format and content.
+    - Summaries are displayed in a user-friendly manner (e.g., email digest, dashboard).
+
+6. **User Interaction Logging**:
+    - Taskeroo logs user interactions with emails (e.g., read, delete).
+    - Interaction data is used to train the ML algorithm.
+    - User data privacy and security are ensured.
+
+7. **Summary of Actions**:
+    - Taskeroo logs all actions taken (e.g., emails deleted, summaries provided).
+    - User receives a daily summary email with an overview of actions.
+    - User can configure the frequency and content of summary emails.
+
+8. **Feedback Collection**:
+    - User is presented with a list of emails for categorization.
+    - User can select or create new categories for each email.
+    - A summary of changes is displayed at the top of the app after submission.
+    - Changes are saved to the database.
+
+### Requirements
+
+#### 1. Authentication
+- [x] Set up Google API OAuth credentials to access the Gmail API.
+- [x] Implement OAuth2 authentication flow to get and refresh tokens.
+- [ ] Handle token expiration and refresh seamlessly.
+
+#### 2. Email Fetching
+- [x] Fetch emails from the user's Gmail account.
+  - [x] Default: Fetch today's emails.
+  - [x] Optional: Fetch yesterday's emails or emails within a date range.
+- [x] Fetch emails from both Inbox and Trash folders.
+- [ ] Ensure efficient fetching of emails without hitting rate limits.
+
+#### 3. Email Categorization
+- [ ] Develop an initial algorithm to categorize emails into nuanced categories.
+- [ ] Continuously improve the algorithm based on user interactions and feedback.
+- [ ] Implement a feedback loop for explicit and implicit feedback from users.
+- [ ] Ensure the system is extensible to add new categories as needed.
+- [ ] Manual Categorization:
+- [x] Allow users to manually categorize emails.
+- [x] Store manual categorization in the manually_updated_category column.
+- [x] Mark the is_manual flag to indicate user changes.
+
+#### 4. Email Deletion
+- [ ] Automatically delete unimportant emails.
+- [ ] Ensure no relevant emails are deleted without user permission.
+- [ ] Allow users to review and confirm deletions.
+
+#### 5. Email Summarization
+- [ ] Provide summaries of important and summarizable emails.
+- [ ] Display summaries in a user-friendly manner.
+- [ ] Allow users to customize the summary format.
+
+#### 6. User Interaction Logging
+- [ ] Log user interactions with emails (e.g., read, delete).
+- [ ] Use logged interactions to train the categorization algorithm.
+- [ ] Ensure privacy and security of user interaction data.
+
+#### 7. Database Management
+- [x] Set up an SQLite database to store emails and user interactions.
+- [x] Implement functions to insert and retrieve email data.
+- [ ] Implement functions to log and retrieve user interactions.
+- [ ] Optimize database performance for large data sets.
+
+#### 8. Summary of Actions
+- [ ] Implement a feature to log and display a summary of actions taken by Taskeroo.
+- [ ] Provide a daily summary email to the user.
+- [ ] Allow users to configure the frequency and content of summary emails.
+
+### Roadmap
+
+#### Phase 1: Foundation
+- Set up authentication and database management.
+- Implement basic email fetching and storing.
+
+#### Phase 2: Enhanced Email Management
+- Implement nuanced categorization system.
+- Fetch emails from both Inbox and Trash folders.
+- Develop user feedback loop for categorization improvement.
+
+#### Phase 3: Automation and Summarization
+- Implement email deletion and summarization.
+- Provide customizable daily summary emails.
+- Ensure user review and confirmation for deletions.
+
+#### Phase 4: Machine Learning Integration
+- Use logged user interactions to train ML models.
+- Continuously improve email categorization with ML.
+
+#### Phase 5: User Experience Refinement
+- Enhance UX for explicit feedback.
+- Allow user-defined rules for categorization.
+- Optimize system performance and scalability.
+
+---
+
+### Next Steps
+1. **Update Schema**: Modify the database schema to include additional fields.
+2. **Fetch Additional Data**: Update the email fetching function to retrieve additional fields from both Inbox and Trash folders.
+3. **Develop Categorization Logic**: Implement the refined categorization logic.
+4. **Integrate User Feedback Loop**: Design and implement the feedback mechanism for explicit and implicit feedback.
+5. **Test and Iterate**: Thoroughly test the categorization logic and user feedback loop.
+
+Please review the updated PRD and let me know if it aligns with your vision. Once confirmed, we can proceed with the next steps.
