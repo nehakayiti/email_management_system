@@ -163,64 +163,103 @@ def mark_email_as_reviewed(email_id):
     finally:
         conn.close()
 
-def display_email(email, categories):
+def mark_all_as_reviewed(email_ids):
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.executemany("UPDATE emails SET reviewed = 1 WHERE id = ?", [(id,) for id in email_ids])
+        conn.commit()
+    finally:
+        conn.close()
+
+def display_email(email, categories, index):
     email_id = email['id']
     widget_key = f"category_{email_id}"
 
-    original_category = email['category']
-    current_category = email['manually_updated_category'] if pd.notna(email['manually_updated_category']) else email['category']
+    if f"category_{email_id}" not in st.session_state:
+        st.session_state[f"category_{email_id}"] = {
+            'original': email['category'],
+            'current': email['manually_updated_category'] if pd.notna(email['manually_updated_category']) else email['category']
+        }
 
-    st.markdown(f"""
-    <div class="email-card">
-        <div class="email-header">
-            <div class="email-subject">{html.escape(email["subject"])}</div>
-            <div class="email-labels">
-                {''.join([f'<span class="email-label">{html.escape(label.strip())}</span>' for label in email['label_ids'].split(',') if email['label_ids']])}
-            </div>
+    def update_category():
+        new_category = st.session_state[f"select_{widget_key}"]
+        update_email_category(email_id, new_category)
+        st.session_state[f"category_{email_id}"]['current'] = new_category
+        st.session_state.emails.loc[index, 'manually_updated_category'] = new_category
+
+    email_card = st.empty()
+    
+    def render_email_card():
+        original_category = st.session_state[f"category_{email_id}"]['original']
+        current_category = st.session_state[f"category_{email_id}"]['current']
+
+        category_display = f"""
+        <div class="email-category">
+            <span class="category-tag original"><i class="fas fa-history"></i> Original: {html.escape(str(original_category))}</span>
+            <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
         </div>
-        <div class="email-sender">
-            <i class="fas fa-user-circle"></i> {html.escape(email["sender_email"])}
-        </div>
-        <div class="email-snippet">{html.escape(email["snippet"][:100])}...</div>
+        """ if original_category != current_category else f"""
         <div class="email-category">
             <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """
+
+        email_card.markdown(f"""
+        <div class="email-card">
+            <div class="email-header">
+                <div class="email-subject">{html.escape(email["subject"])}</div>
+                <div class="email-labels">
+                    {''.join([f'<span class="email-label">{html.escape(label.strip())}</span>' for label in email['label_ids'].split(',') if email['label_ids']])}
+                </div>
+            </div>
+            <div class="email-sender">
+                <i class="fas fa-user-circle"></i> {html.escape(email["sender_email"])}
+            </div>
+            <div class="email-snippet">{html.escape(email["snippet"][:100])}...</div>
+            {category_display}
+        </div>
+        """, unsafe_allow_html=True)
+
+    render_email_card()
 
     col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
-        new_category = st.selectbox(
-            "Select",
+        st.selectbox(
+            "Select a category",
             categories,
-            index=categories.index(current_category) if current_category in categories else 0,
-            key=f"select_{widget_key}"
+            index=categories.index(st.session_state[f"category_{email_id}"]['current']) if st.session_state[f"category_{email_id}"]['current'] in categories else 0,
+            key=f"select_{widget_key}",
+            on_change=update_category
         )
     with col2:
-        if st.button("Update Category", key=f"apply_{widget_key}", type="primary"):
-            update_email_category(email_id, new_category)
-            st.success(f"Category updated to: {new_category}")
-            return "updated"
+        if st.button("Update Category", key=f"apply_{widget_key}", type="primary", on_click=update_category):
+            render_email_card()
+            st.success(f"Category updated to: {st.session_state[f'category_{email_id}']['current']}")
     with col3:
         if st.checkbox("Mark as Reviewed", key=f"review_{widget_key}"):
             mark_email_as_reviewed(email_id)
-            return "reviewed"
-
-    return None
+            st.session_state.emails.drop(index, inplace=True)
+            st.rerun()
 
 def email_categorization_page():
     st.title('📧 Teach Email Categories')
     
     labels = fetch_unique_labels()
-    emails = fetch_unreviewed_emails()
     
-    if emails.empty:
+    if 'emails' not in st.session_state or st.session_state.emails.empty:
+        st.session_state.emails = fetch_unreviewed_emails()
+    
+    if st.session_state.emails.empty:
         st.info("🎉 Great job! You've categorized all available emails. Check back later for more.")
     else:
-        for index, email in emails.iterrows():
-            action = display_email(email, labels)
-            if action in ["updated", "reviewed"]:
-                st.rerun()
+        for index, email in st.session_state.emails.iterrows():
+            display_email(email, labels, index)
+
+    if st.button("Mark All As Reviewed & Get Next Batch", type="primary"):
+        mark_all_as_reviewed(st.session_state.emails['id'].tolist())
+        st.session_state.emails = fetch_unreviewed_emails()
+        st.rerun()
 
 def review_page():
     st.title("📊 Review Learned Categories")

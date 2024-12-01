@@ -10,7 +10,6 @@ streamlit run streamlit_app.py
 #fastapi tests
 pip install pytest httpx fastapi uvicorn
 
-
 # testing fastapi using terminal & curl
 uvicorn api.main:app --reload
 curl http://127.0.0.1:8000
