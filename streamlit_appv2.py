@@ -196,7 +196,6 @@ def display_email(email, categories, index):
 
         category_display = f"""
         <div class="email-category">
-            <span class="category-tag current"><i class="fas fa-folder"></i> Category Updated </span>
             <span class="category-tag original"><i class="fas fa-history"></i> Original: {html.escape(str(original_category))}</span>
             <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
         </div>
@@ -224,7 +223,7 @@ def display_email(email, categories, index):
 
     render_email_card()
 
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
         st.selectbox(
             "Select a category",
@@ -234,13 +233,14 @@ def display_email(email, categories, index):
             on_change=update_category
         )
     with col2:
+        if st.button("Update Category", key=f"apply_{widget_key}", type="primary", on_click=update_category):
+            render_email_card()
+            st.success(f"Category updated to: {st.session_state[f'category_{email_id}']['current']}")
+    with col3:
         if st.checkbox("Mark as Reviewed", key=f"review_{widget_key}"):
             mark_email_as_reviewed(email_id)
             st.session_state.emails.drop(index, inplace=True)
             st.rerun()
-
-    # Re-render the email card after any changes
-    render_email_card()
 
 def email_categorization_page():
     st.title('📧 Teach Email Categories')
