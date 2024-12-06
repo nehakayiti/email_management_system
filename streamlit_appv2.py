@@ -9,6 +9,12 @@ import pandas as pd
 import sqlite3
 from streamlit_float import float_init, float_css_helper
 import html
+import plotly.graph_objects as go
+import plotly.express as px
+from urllib.parse import urlparse
+import datetime
+from collections import Counter
+import re
 
 # Set page config at the very beginning
 st.set_page_config(layout="wide", page_title="Taskeroo - Email Categorization", page_icon="📧")
@@ -34,6 +40,7 @@ st.markdown("""
         padding: 20px;
         margin-bottom: 20px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border: 1px solid #e0e0e0;  /* Add this line for the border */
     }
     .email-header {
         display: flex;
@@ -109,6 +116,23 @@ st.markdown("""
         padding: 8px 16px;
         border-radius: 4px;
     }
+    .stSelectbox > div > label {
+        display: none;
+    }
+    .stSelectbox {
+        margin-top: -15px;
+    }
+    .email-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+    .category-select {
+        flex-grow: 1;
+    }
+    .review-checkbox {
+        min-width: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,136 +187,279 @@ def mark_email_as_reviewed(email_id):
     finally:
         conn.close()
 
-def display_email(email, categories):
+def mark_all_as_reviewed(email_ids):
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.executemany("UPDATE emails SET reviewed = 1 WHERE id = ?", [(id,) for id in email_ids])
+        conn.commit()
+    finally:
+        conn.close()
+
+def display_email(email, categories, index):
     email_id = email['id']
     widget_key = f"category_{email_id}"
 
-    original_category = email['category']
-    current_category = email['manually_updated_category'] if pd.notna(email['manually_updated_category']) else email['category']
+    if f"category_{email_id}" not in st.session_state:
+        st.session_state[f"category_{email_id}"] = {
+            'original': email['category'],
+            'current': email['manually_updated_category'] if pd.notna(email['manually_updated_category']) else email['category']
+        }
 
-    st.markdown(f"""
-    <div class="email-card">
-        <div class="email-header">
-            <div class="email-subject">{html.escape(email["subject"])}</div>
-            <div class="email-labels">
-                {''.join([f'<span class="email-label">{html.escape(label.strip())}</span>' for label in email['label_ids'].split(',') if email['label_ids']])}
-            </div>
+    def update_category():
+        new_category = st.session_state[f"select_{widget_key}"]
+        update_email_category(email_id, new_category)
+        st.session_state[f"category_{email_id}"]['current'] = new_category
+        st.session_state.emails.loc[index, 'manually_updated_category'] = new_category
+
+    email_card = st.empty()
+    
+    def render_email_card():
+        original_category = st.session_state[f"category_{email_id}"]['original']
+        current_category = st.session_state[f"category_{email_id}"]['current']
+
+        category_display = f"""
+        <div class="email-category">
+            <span class="category-tag current"><i class="fas fa-folder"></i> Category Updated </span>
+            <span class="category-tag original"><i class="fas fa-history"></i> Original: {html.escape(str(original_category))}</span>
+            <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
         </div>
-        <div class="email-sender">
-            <i class="fas fa-user-circle"></i> {html.escape(email["sender_email"])}
-        </div>
-        <div class="email-snippet">{html.escape(email["snippet"][:100])}...</div>
+        """ if original_category != current_category else f"""
         <div class="email-category">
             <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """
 
-    col1, col2, col3 = st.columns([3, 1, 1])
+        email_card.markdown(f"""
+        <div class="email-card">
+            <div class="email-header">
+                <div class="email-subject">{html.escape(email["subject"])}</div>
+                <div class="email-labels">
+                    {''.join([f'<span class="email-label">{html.escape(label.strip())}</span>' for label in email['label_ids'].split(',') if email['label_ids']])}
+                </div>
+            </div>
+            <div class="email-sender">
+                <i class="fas fa-user-circle"></i> {html.escape(email["sender_email"])}
+            </div>
+            <div class="email-snippet">{html.escape(email["snippet"][:100])}...</div>
+            {category_display}
+        </div>
+        """, unsafe_allow_html=True)
+
+    render_email_card()
+    
+    col1, col2 = st.columns([3, 1])
     with col1:
-        new_category = st.selectbox(
-            "Select",
+        st.selectbox(
+            "Select a new category",
             categories,
-            index=categories.index(current_category) if current_category in categories else 0,
-            key=f"select_{widget_key}"
+            index=categories.index(st.session_state[f"category_{email_id}"]['current']) if st.session_state[f"category_{email_id}"]['current'] in categories else 0,
+            key=f"select_{widget_key}",
+            on_change=update_category,
         )
     with col2:
-        if st.button("Update Category", key=f"apply_{widget_key}", type="primary"):
-            update_email_category(email_id, new_category)
-            st.success(f"Category updated to: {new_category}")
-            return "updated"
-    with col3:
-        if st.checkbox("Mark as Reviewed", key=f"review_{widget_key}"):
-            mark_email_as_reviewed(email_id)
-            return "reviewed"
+        st.checkbox("Mark as Reviewed", key=f"review_{widget_key}", on_change=lambda: mark_as_reviewed(email_id, index))
+    
+    # Re-render the email card after any changes
+    render_email_card()
 
-    return None
+def mark_as_reviewed(email_id, index):
+    mark_email_as_reviewed(email_id)
+    st.session_state.emails.drop(index, inplace=True)
+    #st.rerun()
 
 def email_categorization_page():
     st.title('📧 Teach Email Categories')
     
     labels = fetch_unique_labels()
-    emails = fetch_unreviewed_emails()
     
-    if emails.empty:
+    if 'emails' not in st.session_state or st.session_state.emails.empty:
+        st.session_state.emails = fetch_unreviewed_emails()
+    
+    if st.session_state.emails.empty:
         st.info("🎉 Great job! You've categorized all available emails. Check back later for more.")
     else:
-        for index, email in emails.iterrows():
-            action = display_email(email, labels)
-            if action in ["updated", "reviewed"]:
-                st.rerun()
+        for index, email in st.session_state.emails.iterrows():
+            display_email(email, labels, index)
 
-def review_page():
-    st.title("📊 Review Learned Categories")
-    
+    if st.button("Mark All As Reviewed & Get Next Batch", type="primary"):
+        mark_all_as_reviewed(st.session_state.emails['id'].tolist())
+        st.session_state.emails = fetch_unreviewed_emails()
+        st.rerun()
+
+def email_stats_page():
+    st.title("📊 Email Categorization Stats")
+
+    # Fetch basic stats
+    total_emails, unreviewed_emails, review_progress = get_email_stats()
+
+    # Create columns for basic stats
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Emails", f"{total_emails:,}")
+    col2.metric("Unreviewed Emails", f"{unreviewed_emails:,}")
+    col3.metric("Review Progress", f"{review_progress:.1f}%")
+
     conn = get_db_connection()
-    
+    try:
+        # Category distribution
+        category_df = pd.read_sql_query("""
+            SELECT 
+                COALESCE(manually_updated_category, category) as final_category, 
+                COUNT(*) as count
+            FROM emails
+            GROUP BY final_category
+            ORDER BY count DESC
+        """, conn)
+
+        # Top senders
+        top_senders = pd.read_sql_query("""
+            SELECT sender_email, COUNT(*) as count
+            FROM emails
+            GROUP BY sender_email
+            ORDER BY count DESC
+            LIMIT 10
+        """, conn)
+
+        # Time-based analysis
+        time_stats = pd.read_sql_query("""
+            SELECT 
+                date,
+                COUNT(*) as email_count
+            FROM emails
+            GROUP BY date
+            ORDER BY date
+        """, conn)
+
+        # Convert Unix timestamp (milliseconds) to datetime
+        time_stats['email_date'] = pd.to_datetime(time_stats['date'], unit='ms')
+
+        # Additional stats
+        manual_updates = pd.read_sql_query("SELECT COUNT(*) as count FROM emails WHERE is_manual = 1", conn).iloc[0]['count']
+        unique_stats = pd.read_sql_query("""
+            SELECT 
+                COUNT(DISTINCT sender_email) as unique_senders,
+                COUNT(DISTINCT COALESCE(manually_updated_category, category)) as unique_categories
+            FROM emails
+        """, conn)
+        emails_with_attachments = pd.read_sql_query("""
+            SELECT COUNT(*) as count
+            FROM emails
+            WHERE attachment_info IS NOT NULL AND attachment_info != ''
+        """, conn).iloc[0]['count']
+        avg_email_length = pd.read_sql_query("""
+            SELECT AVG(LENGTH(email_body)) as avg_length
+            FROM emails
+        """, conn).iloc[0]['avg_length']
+        subject_words = pd.read_sql_query("SELECT subject FROM emails", conn)
+
+    finally:
+        conn.close()
+
+    # Display category distribution
+    st.subheader("Category Distribution")
+    fig = px.pie(category_df, values='count', names='final_category', title='Email Categories')
+    st.plotly_chart(fig)
+
+    # Display top senders
+    st.subheader("Top 10 Email Senders")
+    fig = px.bar(top_senders, x='sender_email', y='count', title='Most Common Senders')
+    st.plotly_chart(fig)
+
+    # Display time-based analysis
+    st.subheader("Email Volume Over Time")
+    if not time_stats.empty:
+        fig = px.line(time_stats, x='email_date', y='email_count', title='Daily Email Volume')
+        st.plotly_chart(fig)
+    else:
+        st.write("No time-based data available.")
+
+    # Additional time-based insights
+    if not time_stats.empty:
+        busiest_day = time_stats.loc[time_stats['email_count'].idxmax()]
+        st.metric("Busiest Day", f"{busiest_day['email_date'].strftime('%Y-%m-%d')} ({busiest_day['email_count']} emails)")
+
+        avg_daily_volume = time_stats['email_count'].mean()
+        st.metric("Average Daily Volume", f"{avg_daily_volume:.1f} emails")
+
+        # Calculate date range
+        date_range = (time_stats['email_date'].max() - time_stats['email_date'].min()).days
+        if date_range > 0:
+            emails_per_day = total_emails / date_range
+            st.metric("Average Emails per Day", f"{emails_per_day:.1f}")
+
+    # Display additional stats
+    st.subheader("Additional Statistics")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Manual Updates", f"{manual_updates:,}")
+    col2.metric("Unique Senders", f"{unique_stats['unique_senders'].iloc[0]:,}")
+    col3.metric("Unique Categories", f"{unique_stats['unique_categories'].iloc[0]:,}")
+
     col1, col2 = st.columns(2)
+    col1.metric("Emails with Attachments", f"{emails_with_attachments:,}")
+    col2.metric("Avg Email Length", f"{avg_email_length:.0f} characters")
+
+    # Most common words in subject
+    words = [word.lower() for subject in subject_words['subject'] for word in re.findall(r'\w+', subject)]
+    word_counts = Counter(words).most_common(10)
+    common_words_df = pd.DataFrame(word_counts, columns=['word', 'count'])
     
-    with col1:
-        total_emails = pd.read_sql_query("SELECT COUNT(*) as count FROM emails", conn).iloc[0]['count']
-        st.metric("Total Emails", total_emails)
+    st.subheader("Most Common Words in Subject Lines")
+    fig = px.bar(common_words_df, x='word', y='count', title='Top 10 Words in Subject Lines')
+    st.plotly_chart(fig)
 
-        unreviewed_emails = pd.read_sql_query("SELECT COUNT(*) as count FROM emails WHERE reviewed = 0", conn).iloc[0]['count']
-        st.metric("Unreviewed Emails", unreviewed_emails)
+    # Derived stats
+    st.subheader("Derived Statistics")
+    if total_emails > 0:
+        attachment_rate = (emails_with_attachments / total_emails) * 100
+        st.metric("Attachment Rate", f"{attachment_rate:.1f}%")
 
-    with col2:
-        manual_categorized = pd.read_sql_query("SELECT COUNT(*) as count FROM emails WHERE is_manual = 1", conn).iloc[0]['count']
-        st.metric("Manually Categorized", manual_categorized)
+        manual_update_rate = (manual_updates / total_emails) * 100
+        st.metric("Manual Update Rate", f"{manual_update_rate:.1f}%")
 
-        if total_emails > 0:
-            reviewed_percentage = ((total_emails - unreviewed_emails) / total_emails) * 100
-            st.metric("Reviewed Percentage", f"{reviewed_percentage:.2f}%")
+    if unreviewed_emails > 0:
+        estimated_time_to_complete = unreviewed_emails * 0.5  # Assuming 30 seconds per email
+        st.metric("Estimated Time to Complete Review", f"{estimated_time_to_complete:.1f} minutes")
 
-    st.subheader("Top 5 Categories")
-    top_categories = pd.read_sql_query("""
-        SELECT COALESCE(manually_updated_category, category) as final_category, COUNT(*) as count
-        FROM emails
-        GROUP BY final_category
-        ORDER BY count DESC
-        LIMIT 5
-    """, conn)
-    
-    if not top_categories.empty:
-        with chart_container():
-            st.bar_chart(top_categories.set_index('final_category'))
-    else:
-        st.info("No categorized emails yet.")
-
-    st.subheader("Recent Manual Categorizations")
-    recent_manual = pd.read_sql_query("""
-        SELECT subject, sender_email, manually_updated_category
-        FROM emails
-        WHERE is_manual = 1
-        ORDER BY id DESC
-        LIMIT 5
-    """, conn)
-    
-    if not recent_manual.empty:
-        st.dataframe(recent_manual, use_container_width=True)
-    else:
-        st.info("No manual categorizations yet.")
-
-    conn.close()
+def get_email_stats():
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM emails")
+        total_emails = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM emails WHERE reviewed = 0")
+        unreviewed_emails = cursor.fetchone()[0]
+        reviewed_emails = total_emails - unreviewed_emails
+        review_progress = (reviewed_emails / total_emails) * 100 if total_emails > 0 else 0
+        return total_emails, unreviewed_emails, review_progress
+    finally:
+        conn.close()
 
 def main():
+    total_emails, unreviewed_emails, review_progress = get_email_stats()
+    
     with st.sidebar:
         selected = option_menu(
             "Main Menu",
-            ["Teach", "Review", "Stats"],
-            icons=['pencil-square', 'check-circle', 'graph-up'],
+            ["Teach", "Stats"],
+            icons=['pencil-square', 'graph-up'],
             menu_icon="cast",
             default_index=0,
-            key="main_menu"  # Add this line to provide a unique key
+            key="main_menu"
         )
+        
+        st.markdown("---")
+        st.markdown("### 📊 Quick Stats")
+        
+        st.metric("Total Emails", f"{total_emails:,}")
+        st.metric("Unreviewed Emails", f"{unreviewed_emails:,}")
+        st.metric("Review Progress", f"{review_progress:.1f}%")
+        
+        st.markdown("---")
     
     if selected == "Teach":
         email_categorization_page()
-    elif selected == "Review":
-        review_page()
     elif selected == "Stats":
-        st.title("📈 Email Stats")
-        st.info("Coming soon! This page will show detailed statistics about your email categorization.")
+        email_stats_page()
 
 if __name__ == "__main__":
     main()
