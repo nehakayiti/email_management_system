@@ -1,0 +1,15 @@
+{
+    "financial": ["statement", "transaction", "credit", "refund", "payment", "invoice", "bill", "deposit", "balance"],
+    "shopping": ["order", "delivered", "shipped", "Amazon", "Walmart", "purchase", "return"],
+    "job": ["hiring", "job listings", "apply now", "career", "position", "opportunity"],
+    "news": ["breaking news", "opinion", "report", "alert", "update"],
+    "subscriptions": ["digest", "weekly", "daily", "newsletter", "subscription"],
+    "senders": ["Amazon.com", "Fidelity", "LinkedIn", "Glassdoor", "Venmo", "PayPal"],
+    "personal": ["Sunil", "Kayiti", "Boston", "appointment", "reservation"],
+    "actions": ["review", "confirm", "update", "schedule", "verify", "action required"],
+    "time_sensitive": ["today", "tomorrow", "upcoming", "reminder", "deadline", "expires soon"],
+    "promotional": ["sale", "off", "limited time", "exclusive", "deal", "discount"],
+    "important": ["urgent", "important", "critical", "attention", "immediate"],
+    "travel": ["flight", "hotel", "reservation", "booking", "itinerary"],
+    "social": ["invitation", "event", "party", "meetup", "networking"]
+  }

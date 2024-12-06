@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import datetime
 from collections import Counter
 import re
+from ui_review_emails import review_emails_page  # Add this import at the top
 
 # Set page config at the very beginning
 st.set_page_config(layout="wide", page_title="Taskeroo - Email Categorization", page_icon="📧")
@@ -329,10 +330,7 @@ def email_stats_page():
             GROUP BY date
             ORDER BY date
         """, conn)
-
-        # Convert Unix timestamp (milliseconds) to datetime
-        time_stats['email_date'] = pd.to_datetime(time_stats['date'], unit='ms')
-
+        
         # Additional stats
         manual_updates = pd.read_sql_query("SELECT COUNT(*) as count FROM emails WHERE is_manual = 1", conn).iloc[0]['count']
         unique_stats = pd.read_sql_query("""
@@ -364,28 +362,6 @@ def email_stats_page():
     st.subheader("Top 10 Email Senders")
     fig = px.bar(top_senders, x='sender_email', y='count', title='Most Common Senders')
     st.plotly_chart(fig)
-
-    # Display time-based analysis
-    st.subheader("Email Volume Over Time")
-    if not time_stats.empty:
-        fig = px.line(time_stats, x='email_date', y='email_count', title='Daily Email Volume')
-        st.plotly_chart(fig)
-    else:
-        st.write("No time-based data available.")
-
-    # Additional time-based insights
-    if not time_stats.empty:
-        busiest_day = time_stats.loc[time_stats['email_count'].idxmax()]
-        st.metric("Busiest Day", f"{busiest_day['email_date'].strftime('%Y-%m-%d')} ({busiest_day['email_count']} emails)")
-
-        avg_daily_volume = time_stats['email_count'].mean()
-        st.metric("Average Daily Volume", f"{avg_daily_volume:.1f} emails")
-
-        # Calculate date range
-        date_range = (time_stats['email_date'].max() - time_stats['email_date'].min()).days
-        if date_range > 0:
-            emails_per_day = total_emails / date_range
-            st.metric("Average Emails per Day", f"{emails_per_day:.1f}")
 
     # Display additional stats
     st.subheader("Additional Statistics")
@@ -440,8 +416,8 @@ def main():
     with st.sidebar:
         selected = option_menu(
             "Main Menu",
-            ["Teach", "Stats"],
-            icons=['pencil-square', 'graph-up'],
+            ["Teach", "Stats", "Review Emails"],  # Add "Review" to the menu options
+            icons=['pencil-square', 'graph-up', 'envelope-open'],  # Add an icon for Review
             menu_icon="cast",
             default_index=0,
             key="main_menu"
@@ -460,6 +436,8 @@ def main():
         email_categorization_page()
     elif selected == "Stats":
         email_stats_page()
+    elif selected == "Review Emails":  # Add this condition
+        review_emails_page()
 
 if __name__ == "__main__":
     main()

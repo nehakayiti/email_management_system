@@ -5,6 +5,7 @@ token.pickle
 #ignore virtual env
 taskeroo-env
 *.db
+*.csv
 
 
 # Byte-compiled / optimized / DLL files
@@ -142,3 +143,4 @@ cython_debug/
 .DS_Store
 Thumbs.db
 taskeroo.db
+emails.csv

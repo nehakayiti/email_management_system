@@ -2,6 +2,7 @@ source taskeroo-env/bin/activate
 export PYTHONPATH=$(pwd)
 pip install -r requirements.txt
 #pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
+pip install python-decouple
 
 #streamlit app setup
 pip install streamlit streamlit-float

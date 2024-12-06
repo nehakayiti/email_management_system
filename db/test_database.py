@@ -6,7 +6,7 @@ from db.database import Database
 @pytest.fixture
 def db(tmpdir):
     db_path = tmpdir.join("test_taskeroo.db")
-    return Database(db_path)
+    return Database()
 
 def test_create_tables(db):
     db.create_tables()

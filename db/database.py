@@ -1,9 +1,10 @@
 # db/database.py
 import sqlite3
+from config import DB_PATH
 
 class Database:
-    def __init__(self, db_path='taskeroo.db'):
-        self.db_path = db_path
+    def __init__(self):
+        self.db_path = DB_PATH
         self.create_tables()
         
     def connect(self):
@@ -16,7 +17,7 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
 
-        # Create table for emails
+        # Create table for emails with new fields
         c.execute('''CREATE TABLE IF NOT EXISTS emails
                     (id TEXT PRIMARY KEY,
                     subject TEXT,
@@ -28,10 +29,13 @@ class Database:
                     attachment_info TEXT,
                     received_time TEXT,
                     category TEXT,
-                    user_tags TEXT
-                    manually_updated_category TEXT,
-                    is_manual INTEGER,
-                    reviewed INTEGER DEFAULT 0)
+                    secondary_categories TEXT,
+                    confidence_score REAL,
+                    all_categories TEXT,
+                    ml_category TEXT,
+                    is_read INTEGER,
+                    is_important INTEGER,
+                    user_feedback TEXT)
                 ''')
 
         # Create table for interactions
@@ -65,19 +69,15 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
 
-        # Add manually_updated_category column if it doesn't exist
+        # Add new columns if they don't exist
         c.execute("PRAGMA table_info(emails)")
         columns = [column[1] for column in c.fetchall()]
-        if 'manually_updated_category' not in columns:
-            c.execute("ALTER TABLE emails ADD COLUMN manually_updated_category TEXT")
         
-        # Add is_manual column if it doesn't exist
-        if 'is_manual' not in columns:
-            c.execute("ALTER TABLE emails ADD COLUMN is_manual INTEGER")
+        if 'secondary_categories' not in columns:
+            c.execute("ALTER TABLE emails ADD COLUMN secondary_categories TEXT")
         
-        # Add reviewed column if it doesn't exist
-        if 'reviewed' not in columns:
-            c.execute("ALTER TABLE emails ADD COLUMN reviewed INTEGER DEFAULT 0")
+        if 'all_categories' not in columns:
+            c.execute("ALTER TABLE emails ADD COLUMN all_categories TEXT")
 
         conn.commit()
         conn.close()
