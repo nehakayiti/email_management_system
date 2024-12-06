@@ -112,101 +112,79 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
-def fetch_unique_labels():
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT category FROM emails")
-        labels = [row[0] for row in cursor.fetchall()]
-        return labels
-    finally:
-        conn.close()
-
+@st.cache_resource
 def get_db_connection():
     return sqlite3.connect('taskeroo.db', check_same_thread=False)
 
-def fetch_unreviewed_emails(limit=10):
+@st.cache_data
+def fetch_unique_labels():
     conn = get_db_connection()
-    try:
-        query = f"""
-        SELECT id, subject, sender_email, snippet, 
-        label_ids, category, manually_updated_category, is_manual
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT category FROM emails WHERE category IS NOT NULL AND category != ''
+        UNION
+        SELECT DISTINCT manually_updated_category FROM emails 
+        WHERE manually_updated_category IS NOT NULL AND manually_updated_category != ''
+    """)
+    labels = [row[0] for row in cursor.fetchall()]
+    return sorted(labels)
+
+def update_email_category(conn, email_id, new_category):
+    print(f"Updating database for email ID: {email_id} with new category: {new_category}")
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE emails 
+        SET manually_updated_category = ?, is_manual = 1, reviewed = 1 
+        WHERE id = ?
+    """, (new_category, email_id))
+    conn.commit()
+    print("Database update committed")
+
+@st.cache_data
+def fetch_unreviewed_emails(_limit=10):
+    conn = get_db_connection()
+    query = """
+        SELECT id, subject, sender_email, snippet, label_ids, category, 
+               manually_updated_category, is_manual, 
+               COALESCE(manually_updated_category, category) as current_category,
+               datetime(date, 'unixepoch') as date_time
         FROM emails 
         WHERE reviewed = 0
-        ORDER BY id
-        LIMIT {limit}
-        """
-        return pd.read_sql_query(query, conn)
-    finally:
-        conn.close()
+        LIMIT ?
+    """
+    # Convert _limit to an integer and pass it as a tuple
+    return pd.read_sql_query(query, conn, params=(int(_limit),))
 
-def update_email_category(email_id, new_category):
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE emails 
-            SET manually_updated_category = ?, is_manual = 1
-            WHERE id = ?
-        """, (new_category, email_id))
-        conn.commit()
-    finally:
-        conn.close()
-
-def mark_email_as_reviewed(email_id):
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE emails SET reviewed = 1 WHERE id = ?", (email_id,))
-        conn.commit()
-    finally:
-        conn.close()
-
-def mark_all_as_reviewed(email_ids):
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.executemany("UPDATE emails SET reviewed = 1 WHERE id = ?", [(id,) for id in email_ids])
-        conn.commit()
-    finally:
-        conn.close()
-
-def display_email(email, categories, index):
+def display_email(email, categories):
     email_id = email['id']
     widget_key = f"category_{email_id}"
 
-    if f"category_{email_id}" not in st.session_state:
-        st.session_state[f"category_{email_id}"] = {
-            'original': email['category'],
-            'current': email['manually_updated_category'] if pd.notna(email['manually_updated_category']) else email['category']
-        }
+    print(f"Displaying email ID: {email_id}")
+    print(f"Initial category: {email['current_category']}")
 
-    def update_category():
-        new_category = st.session_state[f"select_{widget_key}"]
-        update_email_category(email_id, new_category)
-        st.session_state[f"category_{email_id}"]['current'] = new_category
-        st.session_state.emails.loc[index, 'manually_updated_category'] = new_category
+    # Use session state to store the current and original categories
+    if f"original_category_{email_id}" not in st.session_state:
+        st.session_state[f"original_category_{email_id}"] = email['current_category']
+    if f"current_category_{email_id}" not in st.session_state:
+        st.session_state[f"current_category_{email_id}"] = email['current_category']
 
-    email_card = st.empty()
-    
     def render_email_card():
-        original_category = st.session_state[f"category_{email_id}"]['original']
-        current_category = st.session_state[f"category_{email_id}"]['current']
-
+        original_category = st.session_state[f"original_category_{email_id}"]
+        current_category = st.session_state[f"current_category_{email_id}"]
+        print(f"Rendering email card with original category: {original_category} and current category: {current_category}")
+        
         category_display = f"""
         <div class="email-category">
-            <span class="category-tag current"><i class="fas fa-folder"></i> Category Updated </span>
-            <span class="category-tag original"><i class="fas fa-history"></i> Original: {html.escape(str(original_category))}</span>
-            <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
+            <span class="category-tag original"><i class="fas fa-history"></i> Original: {html.escape(original_category)}</span>
+            <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(current_category)}</span>
         </div>
         """ if original_category != current_category else f"""
         <div class="email-category">
-            <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(str(current_category))}</span>
+            <span class="category-tag current"><i class="fas fa-folder"></i> Current: {html.escape(current_category)}</span>
         </div>
         """
 
-        email_card.markdown(f"""
+        st.markdown(f"""
         <div class="email-card">
             <div class="email-header">
                 <div class="email-subject">{html.escape(email["subject"])}</div>
@@ -224,40 +202,48 @@ def display_email(email, categories, index):
 
     render_email_card()
 
+    st.markdown('<div class="email-actions">', unsafe_allow_html=True)
+    st.markdown('<div class="action-label">Categorize this email:</div>', unsafe_allow_html=True)
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.selectbox(
+        new_category = st.selectbox(
             "Select a category",
             categories,
-            index=categories.index(st.session_state[f"category_{email_id}"]['current']) if st.session_state[f"category_{email_id}"]['current'] in categories else 0,
-            key=f"select_{widget_key}",
-            on_change=update_category
+            index=categories.index(st.session_state[f"current_category_{email_id}"]) if st.session_state[f"current_category_{email_id}"] in categories else 0,
+            key=f"select_{widget_key}"
         )
+        print(f"Selected new category: {new_category}")
     with col2:
-        if st.checkbox("Mark as Reviewed", key=f"review_{widget_key}"):
-            mark_email_as_reviewed(email_id)
-            st.session_state.emails.drop(index, inplace=True)
+        if st.button("Update Category", key=f"apply_{widget_key}", type="primary"):
+            print(f"Update button pressed for email ID: {email_id}")
+            update_email_category(get_db_connection(), email_id, new_category)
+            print(f"Database updated with new category: {new_category}")
+            st.session_state[f"current_category_{email_id}"] = new_category
+            st.success(f"Category updated to: {new_category}")
             st.rerun()
 
-    # Re-render the email card after any changes
-    render_email_card()
+    return False
 
 def email_categorization_page():
     st.title('📧 Teach Email Categories')
     
+    conn = get_db_connection()
     labels = fetch_unique_labels()
     
-    if 'emails' not in st.session_state or st.session_state.emails.empty:
+    if 'emails' not in st.session_state:
         st.session_state.emails = fetch_unreviewed_emails()
     
-    if st.session_state.emails.empty:
+    emails = st.session_state.emails
+    
+    if emails.empty:
         st.info("🎉 Great job! You've categorized all available emails. Check back later for more.")
     else:
-        for index, email in st.session_state.emails.iterrows():
-            display_email(email, labels, index)
+        for index, email in emails.iterrows():
+            print(f"Processing email at index {index}")
+            display_email(email, labels)
 
-    if st.button("Mark All As Reviewed & Get Next Batch", type="primary"):
-        mark_all_as_reviewed(st.session_state.emails['id'].tolist())
+    if st.button('🔄 Get Next Batch', key='next_batch'):
+        print("Next Batch button pressed")
         st.session_state.emails = fetch_unreviewed_emails()
         st.rerun()
 
