@@ -1,3 +1,24 @@
+Agentic workflow for email management system. 
+    * Kicking off new fork in the project after a very busy application cycle and work that was all consuming
+    * This will be a complete rethinking of the project and will be a new branch
+    * An agentic workflow will be created that will be able to manage your email inbox, labels and trash etc
+    * The agent will be able to categorize the emails and delete the unimportant emails
+    * the agent will allow me to only focus on the most important emails and handle the rest appropriately
+    * The agent will be able to summarize the important emails and send them to the inbox
+    * The agent will be able to delete the unimportant emails and move them to the trash
+    * The agent will be able to handle the emails that are important but not urgent and move them to the inbox
+    * The agent will be able to handle the emails that are important and urgent and handle them appropriately
+    * The agent will be able to handle the emails that are not important and not urgent and delete them
+    * The agent will be able to handle the emails that are important and not urgent and move them to the inbox
+    * The agent will be able to handle the emails that are not important and urgent and delete them
+    There will be a separate UX that the user will interact with to manage the emails and the agent will handle the rest. 
+        THE GOAL IS TO NOT INTERACT WITH GMAIL AT ALL.
+
+* Given this shift in the project, I will need to create a new environment and install the necessary dependencies
+    * What should be the agent tech stack?
+        * Langgraph or pedanticp
+
+
 source taskeroo-env/bin/activate
 export PYTHONPATH=$(pwd)
 pip install -r requirements.txt
